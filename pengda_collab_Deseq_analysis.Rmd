@@ -1,0 +1,176 @@
+---
+title: "DESeq on Pengda Dataset"
+author: "Kwame Forbes"
+date: "9/29/2022"
+output: html_document
+---
+Load dependencies
+```{r}
+#imports
+library(DESeq2)
+library(BiocManager)
+BiocManager::install("tximeta")
+library("tximeta")
+BiocManager::install("tximport")
+library(tximport)
+BiocManager::install("apeglm")
+library(dplyr)
+library(ggplot2)
+library(AnnotationDbi)
+library(org.Hs.eg.db)
+BiocManager::install("RMAT")
+library(RMAT)
+```
+
+Build DDS object
+```{r}
+pathway <- "/pine/scr/k/w/kwamek/pengda_collab/Quantfiles"
+
+dir <- list.files(path = pathway, pattern = NULL, all.files = FALSE,
+                  full.names = TRUE, recursive = FALSE,
+                  ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE)
+
+#list of files in quants.sf files
+sample.quants <- file.path(dir,"quant.sf")
+
+##building txi
+t2g <- read.table(file = "/proj/RNA_lab/ZARD/RIP/tx2genes.txt", sep = "\t", header = T)
+head(t2g)
+t2g <- t2g[,c("ENST","ENSG","Gene_name")]
+dim(t2g)
+genes <- t2g[,c("ENSG","Gene_name")]
+genes <- unique(genes, by="ENSG")
+head(genes)
+
+txi <- tximport(sample.quants,type="salmon",tx2gene = t2g,existenceOptional=T,ignoreAfterBar = T)
+
+sample.data <- read.table("/pine/scr/k/w/kwamek/pengda_collab/experiment.txt",header = F)
+name <- sample.data$V1
+condition <- sample.data$V2
+
+samples <- cbind(name,condition)
+
+dds <- DESeqDataSetFromTximport(txi,colData = samples, design = ~ condition)
+
+dds <- DESeq(dds)
+```
+
+Setting ref
+```{r}
+dds$condition <- factor(dds$condition, levels = c("EV","T200M","WT"))
+
+dds$condition <- relevel(dds$condition, ref = "EV")
+```
+
+Compare WT vs EV
+```{r}
+resultsNames(dds)
+
+deseqWTvEV <-lfcShrink(dds, coef="condition_WT_vs_EV", type="apeglm")
+deseqWTvEV <- as.data.frame(deseqWTvEV)
+deseqWTvEV$ensem = gsub("\\..*","",row.names(deseqWTvEV))
+
+deseqWTvEV$symbol = mapIds(org.Hs.eg.db,
+                             keys = deseqWTvEV$ensem,
+                             column = "SYMBOL",
+                             keytype="ENSEMBL",
+                             multiVals = "first")
+deseqWTvEV <- subset(deseqWTvEV, select = c(6,7,1,2,3,4,5))
+deseqWTvEVfilter <- subset(deseqWTvEV,abs(log2FoldChange)> 1.0 & padj < 0.05)
+write.csv(deseqWTvEV,"DGE_WTvEV.csv")
+write.csv(deseqWTvEVfilter,"DGE_WTvEVfilter.csv")
+```
+
+Compare T200M vs EV
+```{r}
+deseqT200MvEV <-lfcShrink(dds, coef="condition_T200M_vs_EV", type="apeglm")
+deseqT200MvEV <- as.data.frame(deseqT200MvEV)
+deseqT200MvEV$ensem = gsub("\\..*","",row.names(deseqT200MvEV))
+
+deseqT200MvEV$symbol = mapIds(org.Hs.eg.db,
+                              keys = deseqT200MvEV$ensem,
+                              column = "SYMBOL",
+                              keytype="ENSEMBL",
+                              multiVals = "first")
+deseqT200MvEV= deseqT200MvEV[,c(6,7,1,2,3,4,5)]
+deseqT200MvEVfilter <- subset(deseqT200MvEV,abs(log2FoldChange)> 1.0 & padj < 0.05)
+write.csv(deseqT200MvEV,"DGE_T200MvEV.csv")
+write.csv(deseqT200MvEVfilter,"DGE_T200MvEVfilter.csv")
+```
+
+Compare WT vs T200M
+ref set to T200M
+```{r}
+pathway <- "/pine/scr/k/w/kwamek/pengda_collab/Quantfiles-WTvT200M"
+
+dir <- list.files(path = pathway, pattern = NULL, all.files = FALSE,
+                  full.names = TRUE, recursive = FALSE,
+                  ignore.case = FALSE, include.dirs = FALSE, no.. = FALSE)
+
+#list of files in quants.sf files
+sample.quants <- file.path(dir,"quant.sf")
+
+##building txi
+t2g <- read.table(file = "/proj/RNA_lab/ZARD/RIP/tx2genes.txt", sep = "\t", header = T)
+head(t2g)
+t2g <- t2g[,c("ENST","ENSG","Gene_name")]
+dim(t2g)
+genes <- t2g[,c("ENSG","Gene_name")]
+genes <- unique(genes, by="ENSG")
+head(genes)
+
+txi <- tximport(sample.quants,type="salmon",tx2gene = t2g,existenceOptional=T,ignoreAfterBar = T)
+
+sample.data <- read.table("/pine/scr/k/w/kwamek/pengda_collab/experiment2.txt",header = F)
+name <- sample.data$V1
+condition <- sample.data$V2
+
+samples <- cbind(name,condition)
+
+dds2 <- DESeqDataSetFromTximport(txi,colData = samples, design = ~ condition)
+
+dds2 <- DESeq(dds2)
+
+
+dds2$condition <- relevel(dds2$condition, ref = "T200M")
+
+deseqWTvT200M <-lfcShrink(dds2, coef="condition_WT_vs_T200M", type="apeglm")
+deseqWTvT200M <- as.data.frame(deseqWTvT200M)
+deseqWTvT200M$ensem = gsub("\\..*","",row.names(deseqWTvT200M))
+
+deseqWTvT200M$symbol = mapIds(org.Hs.eg.db,
+                           keys = deseqWTvT200M$ensem,
+                           column = "SYMBOL",
+                           keytype="ENSEMBL",
+                           multiVals = "first")
+deseqWTvT200M= deseqWTvT200M[,c(6,7,1,2,3,4,5)]
+deseqWTvT200Mfilter <- subset(deseqWTvT200M,abs(log2FoldChange)> 1.0 & padj < 0.05)
+write.csv(deseqWTvT200M,"DGE_WTvT200M.csv")
+write.csv(deseqWTvT200Mfilter,"DGE_WTvT200Mfilter.csv")
+
+
+```
+Plots WT vs T200M
+```{r}
+
+p <- ggplot(data = deseqWTvT200M,mapping= 
+              aes(log2FoldChange,-log10(padj)))+ theme_classic() + geom_point(color = ifelse(abs(deseqWTvT200M$log2FoldChange) >= 1.0 & deseqWTvT200M$padj <= 0.05,"red","black")) + 
+  theme_classic()+ ggtitle("WT vs. T200M Differential Gene Expression") +xlab("Log2FoldChange") + ylab("-log10(padj)")
+p+ theme(plot.title = element_text(color="red", size=14, face="bold.italic"),
+         axis.title.x = element_text(color="blue", size=14, face="bold"),
+         axis.title.y = element_text(color="#993333", size=14, face="bold"))
+
+
+
+
+
+```
+
+
+
+
+
+
+
+
+
