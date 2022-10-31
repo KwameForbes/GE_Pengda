@@ -1,2 +1,2 @@
-# GE_Pendga
-Pendga Differential Gene Expression Analysis
+# GE_Pengda
+Pengda Differential Gene Expression Analysis using DESeq2
