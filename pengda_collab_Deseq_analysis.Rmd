@@ -18,8 +18,6 @@ library(dplyr)
 library(ggplot2)
 library(AnnotationDbi)
 library(org.Hs.eg.db)
-BiocManager::install("RMAT")
-library(RMAT)
 ```
 
 Build DDS object
@@ -52,14 +50,57 @@ samples <- cbind(name,condition)
 
 dds <- DESeqDataSetFromTximport(txi,colData = samples, design = ~ condition)
 
+#WARNING Be careful with this code chunk
+dds$condition <- factor(dds$condition, levels = c("EV","T200M","WT"))
+dds$condition <- relevel(dds$condition, ref = "EV")
+#~~
+
 dds <- DESeq(dds)
+
+#pre-filtering
+keep <- rowSums(counts(dds)) > 0
+dds <- dds[keep,]
 ```
 
-Setting ref
+Seeing whats the reference
 ```{r}
-dds$condition <- factor(dds$condition, levels = c("EV","T200M","WT"))
+res <- results(dds)
+res
+resultsNames(dds)
+```
 
-dds$condition <- relevel(dds$condition, ref = "EV")
+PCA for conditions
+```{r}
+vsd <- vst(dds)
+pca <- plotPCA(vsd,intgroup ="condition")
+```
+
+pheatmap for counts
+```{r}
+Counts1 <- as.data.frame(counts(dds))
+Counts1 <- na.omit(Counts1)
+Counts2 <- as.data.frame(counts(dds,normalized=TRUE))
+names(Counts1) <- c("EV1", "EV2","EV3","T200M1","T200M2","T200M3","WT1","WT2","WT3")
+names(Counts2) <- c("EV1", "EV2","EV3","T200M1","T200M2","T200M3","WT1","WT2","WT3")
+Counts3 <- as.data.frame(rowScales(Counts1))
+
+
+
+pheatmap(Counts1, cluster_rows=F, show_rownames=F,
+         cluster_cols=F, main = "Counts1", border_color = T,
+         color = colorRampPalette(c("blue","cyan","pink","red"))(100),
+         scale = "row",fontsize = 12
+)
+pheatmap(Counts2, cluster_rows=F, show_rownames=F,
+         cluster_cols=F, main = "Counts2", border_color = T,
+         color = colorRampPalette(c("blue","cyan","pink","red"))(100),
+         scale = "row",fontsize = 12
+)
+pheatmap(Counts3, cluster_rows=F, show_rownames=F,
+         cluster_cols=F, main = "Counts3", border_color = T,
+         color = colorRampPalette(c("blue","cyan","pink","red"))(100),
+         scale = "row",fontsize = 12
+)
 ```
 
 Compare WT vs EV
@@ -67,6 +108,10 @@ Compare WT vs EV
 resultsNames(dds)
 
 deseqWTvEV <-lfcShrink(dds, coef="condition_WT_vs_EV", type="apeglm")
+
+resWTvEV <- results(deseqWTvEV, alpha=0.05)
+summary(resWTvEV)
+
 deseqWTvEV <- as.data.frame(deseqWTvEV)
 deseqWTvEV$ensem = gsub("\\..*","",row.names(deseqWTvEV))
 
@@ -77,8 +122,9 @@ deseqWTvEV$symbol = mapIds(org.Hs.eg.db,
                              multiVals = "first")
 deseqWTvEV <- subset(deseqWTvEV, select = c(6,7,1,2,3,4,5))
 deseqWTvEVfilter <- subset(deseqWTvEV,abs(log2FoldChange)> 1.0 & padj < 0.05)
-write.csv(deseqWTvEV,"DGE_WTvEV.csv")
-write.csv(deseqWTvEVfilter,"DGE_WTvEVfilter.csv")
+
+# write.csv(deseqWTvEV,"DGE_WTvEV.csv")
+# write.csv(deseqWTvEVfilter,"DGE_WTvEVfilter.csv")
 ```
 
 Compare T200M vs EV
@@ -94,8 +140,9 @@ deseqT200MvEV$symbol = mapIds(org.Hs.eg.db,
                               multiVals = "first")
 deseqT200MvEV= deseqT200MvEV[,c(6,7,1,2,3,4,5)]
 deseqT200MvEVfilter <- subset(deseqT200MvEV,abs(log2FoldChange)> 1.0 & padj < 0.05)
-write.csv(deseqT200MvEV,"DGE_T200MvEV.csv")
-write.csv(deseqT200MvEVfilter,"DGE_T200MvEVfilter.csv")
+
+# write.csv(deseqT200MvEV,"DGE_T200MvEV.csv")
+# write.csv(deseqT200MvEVfilter,"DGE_T200MvEVfilter.csv")
 ```
 
 Compare WT vs T200M
@@ -131,6 +178,10 @@ dds2 <- DESeqDataSetFromTximport(txi,colData = samples, design = ~ condition)
 
 dds2 <- DESeq(dds2)
 
+#pre-filtering
+keep <- rowSums(counts(dds2)) > 0
+dds2 <- dds2[keep,]
+
 
 dds2$condition <- relevel(dds2$condition, ref = "T200M")
 
@@ -145,8 +196,9 @@ deseqWTvT200M$symbol = mapIds(org.Hs.eg.db,
                            multiVals = "first")
 deseqWTvT200M= deseqWTvT200M[,c(6,7,1,2,3,4,5)]
 deseqWTvT200Mfilter <- subset(deseqWTvT200M,abs(log2FoldChange)> 1.0 & padj < 0.05)
-write.csv(deseqWTvT200M,"DGE_WTvT200M.csv")
-write.csv(deseqWTvT200Mfilter,"DGE_WTvT200Mfilter.csv")
+
+# write.csv(deseqWTvT200M,"DGE_WTvT200M.csv")
+# write.csv(deseqWTvT200Mfilter,"DGE_WTvT200Mfilter.csv")
 
 
 ```
@@ -162,9 +214,78 @@ p+ theme(plot.title = element_text(color="red", size=14, face="bold.italic"),
 
 
 
-
+```
+Plot WT vs EV
+```{r}
+q <- ggplot(data = deseqWTvEV,mapping= 
+              aes(log2FoldChange,-log10(padj)))+ theme_classic() + geom_point(color = ifelse(abs(deseqWTvEV$log2FoldChange) >= 1.0 & deseqWTvEV$padj <= 0.05,"red","black")) + 
+  theme_classic()+ ggtitle("WT vs. EV Differential Gene Expression") +xlab("Log2FoldChange") + ylab("-log10(padj)")
+q + theme(plot.title = element_text(color="red", size=14, face="bold.italic"),
+         axis.title.x = element_text(color="blue", size=14, face="bold"),
+         axis.title.y = element_text(color="#993333", size=14, face="bold"))
 
 ```
+Plot T200M vs EV
+```{r}
+r <- ggplot(data = deseqT200MvEV,mapping= 
+              aes(log2FoldChange,-log10(padj)))+ theme_classic() + geom_point(color = ifelse(abs(deseqT200MvEV$log2FoldChange) >= 1.0 & deseqT200MvEV$padj <= 0.05,"red","black")) + 
+  theme_classic()+ ggtitle("T200M vs. EV Differential Gene Expression") +xlab("Log2FoldChange") + ylab("-log10(padj)")
+r + theme(plot.title = element_text(color="red", size=14, face="bold.italic"),
+         axis.title.x = element_text(color="blue", size=14, face="bold"),
+         axis.title.y = element_text(color="#993333", size=14, face="bold"))
+```
+Looking at T200MvEV vs WTvEV L2FC.
+```{r}
+l2fc <- merge(deseqT200MvEVfilter,deseqWTvEVfilter,by ="ensem")
+l2fc <- subset(l2fc, select = c(2,4,10))
+colnames(l2fc) <- c("SYMBOL","T200MvEV","WTvEV")
+
+boxplot(l2fc$T200MvEV,l2fc$WTvEV, names=c("T200MvEV","WTvEV"), col=c("turquoise","tomato"),
+        xlab="Comparisions",
+        ylab ="Log 2 Fold Change",
+        main="L2FC of T200MvEV vs WTvEV")
+```
+Looking at WTvT200M L2FC.
+```{r}
+boxplot(deseqWTvT200Mfilter$log2FoldChange, names=c("WTvT200M"), col=c("wheat"),
+        xlab="WTvT200M",
+        ylab ="Log 2 Fold Change",
+        main="L2FC of WTvT200M")
+
+s <- ggplot(deseqWTvT200Mfilter, aes(x="WTvT200M", y=log2FoldChange)) + 
+   theme_classic()+ ggtitle("L2FC of WTvT200M") + ylab("Log2FoldChange") + geom_violin()
+
+s2 <- s + theme(plot.title = element_text(color="red", size=14, face="bold.italic"),
+         axis.title.x = element_text(color="blue", size=14, face="bold"),
+         axis.title.y = element_text(color="#993333", size=14, face="bold"))
+ 
+s2 <- s2 + geom_boxplot(width=0.1)
+
+resWTvT200M <- results(dds2, alpha=0.05)
+summary(resWTvT200M)
+
+#WT vs T200M PCA
+vsd2 <- vst(dds2) 
+pca2 <- plotPCA(vsd2,intgroup="condition")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
