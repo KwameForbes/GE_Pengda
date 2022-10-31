@@ -9,15 +9,14 @@ Load dependencies
 #imports
 library(DESeq2)
 library(BiocManager)
-BiocManager::install("tximeta")
 library("tximeta")
-BiocManager::install("tximport")
 library(tximport)
-BiocManager::install("apeglm")
 library(dplyr)
 library(ggplot2)
 library(AnnotationDbi)
 library(org.Hs.eg.db)
+library(pheatmap)
+library(scrime)
 ```
 
 Build DDS object
@@ -61,6 +60,29 @@ dds <- DESeq(dds)
 keep <- rowSums(counts(dds)) > 0
 dds <- dds[keep,]
 ```
+
+plot MLST8
+```{r}
+d <- plotCounts(dds, gene= "ENSG00000167965.18", intgroup="condition", returnData = TRUE)
+
+a <- ggplot(d, aes(x=condition, y=count, color = condition)) + 
+  geom_point(position=position_jitter(w=0.1,h=0)) + labs( x = " ",title ="MLST8", y = "Normalized Counts") +
+  scale_y_log10(breaks=c(500,3000,28000))+ theme(plot.title = element_text(color="black", size=20, face="bold.italic"),
+         axis.title.x = element_text(color="black", size=20, face="bold"),
+         axis.title.y = element_text(color="black", size=20, face="bold"),
+         axis.text = element_text(size = 20),
+         legend.text = element_text(size=17),
+         legend.title = element_text(size=20),
+         )+ labs(color='Conditions')
+
+a
+
+
+
+ 
+                             
+```
+
 
 Seeing whats the reference
 ```{r}
@@ -122,6 +144,8 @@ deseqWTvEV$symbol = mapIds(org.Hs.eg.db,
                              multiVals = "first")
 deseqWTvEV <- subset(deseqWTvEV, select = c(6,7,1,2,3,4,5))
 deseqWTvEVfilter <- subset(deseqWTvEV,abs(log2FoldChange)> 1.0 & padj < 0.05)
+
+plotCounts(deseqWTvEV, gene= "ENSG00000167965.18", intgroup="condition")
 
 # write.csv(deseqWTvEV,"DGE_WTvEV.csv")
 # write.csv(deseqWTvEVfilter,"DGE_WTvEVfilter.csv")
